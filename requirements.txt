@@ -1,0 +1,12 @@
+pandas
+scikit-learn
+matplotlib
+seaborn
+mlflow
+fastapi
+uvicorn
+pytest
+httpx
+flake8
+joblib
+ipykernel

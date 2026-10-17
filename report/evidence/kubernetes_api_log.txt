@@ -1,0 +1,7 @@
+Sanitized application logs from the Kubernetes API after successful GET /health
+and POST /predict requests. Uvicorn access logs were disabled. No request fields,
+patient values, prediction class, probability, or caller address are recorded.
+
+INFO:     API request completed: method=GET path=/health status_code=200
+INFO:     Prediction generated for endpoint=/predict; input_values_logged=false
+INFO:     API request completed: method=POST path=/predict status_code=200

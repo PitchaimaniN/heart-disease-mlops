@@ -1,0 +1,11 @@
+.venv/
+.git/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+mlruns/
+notebooks/
+data/
+report/
+artifacts/
+models/*.json

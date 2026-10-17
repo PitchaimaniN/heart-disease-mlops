@@ -1,0 +1,49 @@
+name: Heart Disease MLOps CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run download step
+        run: python download.py
+
+      - name: Train model and log experiments
+        run: python train.py
+
+      - name: Lint code
+        run: flake8 .
+
+      - name: Run unit tests
+        run: pytest -q
+
+      - name: Upload training outputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: heart-disease-training-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            models/heart_disease_pipeline.joblib
+            models/training_summary.json
+            artifacts/
+            mlruns/
+          if-no-files-found: warn
+          retention-days: 14
