@@ -198,3 +198,4 @@ def test_predict_rejects_target_field():
     response = client.post("/predict", json=payload)
 
     assert response.status_code == 422
+    
