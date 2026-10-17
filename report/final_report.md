@@ -4,124 +4,277 @@
 
 ## 1. Project summary
 
-This project demonstrates an end-to-end machine-learning workflow for the
-Cleveland Heart Disease dataset: data download and cleaning, exploratory data
-analysis, model comparison and MLflow tracking, a validated FastAPI endpoint
-with a metrics monitoring interface, Docker packaging, Kubernetes deployment,
-and GitHub Actions automation.
+This project implements an end-to-end MLOps workflow for the Cleveland Heart Disease dataset. The pipeline includes data acquisition and cleaning, exploratory data analysis (EDA), feature engineering, model comparison, MLflow experiment tracking, FastAPI serving, Docker containerization, Kubernetes deployment, GitHub Actions CI/CD, and a final written report. The goal is to design a reproducible, cloud-ready machine learning solution for heart disease risk prediction.
 
-The classifier is for coursework and demonstration only. It is not a medical
-device and its outputs must not be used for diagnosis, treatment, or clinical
-decision-making.
+This system is built for academic and learning purposes. It is not a medical product and must not be used for actual clinical diagnosis or treatment decisions.
 
-## 2. Workflow and components
+## 2. Setup and installation instructions
 
-1. `download.py` downloads the UCI source file, audits missing values, maps the
-   original outcome to a binary target, and writes the prepared CSV.
-2. `notebooks/eda.ipynb` inspects the prepared data and produces labeled
-   feature histograms, a correlation heatmap, and a target class-balance chart.
-3. `train.py` compares Logistic Regression and Random Forest pipelines, logs
-   experiments and ROC plots to MLflow, and saves the selected fitted pipeline.
-4. `api/main.py` serves `/health`, `/metrics`, and `/predict`; `tests/test_app.py`
-   checks unit tests for data processing, model pipeline imputation, successful requests,
-   and input validation.
-5. The Docker image packages the API and trained model. Kubernetes runs two
-   API pods behind a Service.
-6. `.github/workflows/main.yml` repeats download, training, lint, and tests on
-   GitHub Actions and uploads generated training outputs.
+### 2.1 Clone and setup
 
-## 3. Dataset preparation and EDA
+```bash
+git clone [https://github.com/PitchaimaniN/heart-disease-mlops.git](https://github.com/PitchaimaniN/heart-disease-mlops.git)
+cd heart-disease-mlops
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-The cleaned Cleveland dataset contains 303 records, 13 predictor columns, and
-one binary target. Target 0 indicates no disease in the source label mapping;
-target 1 groups original Cleveland outcome values 1-4 as disease. The observed
-class counts are:
+### 2.2 Prepare the data
+
+```bash
+python download.py
+```
+
+This downloads the Cleveland UCI data and saves:
+- `data/raw/heart.csv`
+- `data/processed/heart_clean.csv`
+
+### 2.3 Train models and log experiments
+
+```bash
+python train.py
+```
+
+This compares Logistic Regression and Random Forest models, evaluates them using cross-validation and held-out metrics, and saves the best pipeline in `models/heart_disease_pipeline.joblib`.
+
+### 2.4 Run the API locally
+
+```bash
+python -m uvicorn api.main:app --reload --no-access-log --host 127.0.0.1 --port 8000
+```
+
+Open the following endpoints:
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/metrics`
+- `http://127.0.0.1:8000/docs`
+
+### 2.5 Run tests and linting
+
+```bash
+pytest -q tests
+flake8 download.py train.py api tests
+```
+
+## 3. Architecture diagram
+
+```text
++---------------------+      +-------------------------+
+| GitHub Repository   | ---> | GitHub Actions CI/CD    |
+| (code + notebooks)  |      | - download data         |
++---------------------+      | - linting               |
+                              | - pytest                |
+                              | - train model           |
+                              +-----------+-------------+
+                                              |
+                                              v
+                              +-------------------------+
+                              | MLflow Experiment Store |
+                              | Parameters, Metrics      |
+                              | Plots, Artifacts        |
+                              +-----------+-------------+
+                                          |
+                                          v
+                              +-------------------------+
+                              | Trained Model Pipeline  |
+                              | (.joblib)              |
+                              +-----------+-------------+
+                                          |
+                                          v
+                              +-------------------------+
+                              | FastAPI Service        |
+                              | /health /metrics       |
+                              | /predict               |
+                              +-----------+-------------+
+                                          |
+                              +-----------+-------------+
+                              | Docker Container        |
+                              | Kubernetes Deployment   |
+                              +-------------------------+
+```
+
+This architecture keeps the data pipeline, model tracking, and serving layer separate while allowing the same trained model to be reused in CI/CD and deployment stages.
+
+## 4. Data acquisition and exploratory data analysis
+
+The project uses the Cleveland Heart Disease dataset from the UCI Machine Learning Repository. The cleaned dataset contains 303 records and 13 predictor columns with one binary target.
 
 | Target | Meaning | Records | Share |
 | --- | --- | ---: | ---: |
 | 0 | No heart disease | 164 | 54.13% |
 | 1 | Heart disease | 139 | 45.87% |
 
-There are six missing predictor values in the source: four in `ca` and two in
-`thal`. They are retained in the cleaned data and handled by median imputation
-inside each model pipeline. The class proportions are reasonably close, and
-the training code uses stratified splitting and cross-validation to preserve
-the class mix.
+The raw source contains missing entries encoded as `?`. In the cleaned dataset, these missing values are retained and later handled through median imputation inside the model pipeline. This avoids data leakage while preserving the original patient records for training.
 
-The EDA notebook saves the following figures:
+### EDA findings
+- The target class distribution is reasonably balanced.
+- Missing values are concentrated in `ca` and `thal`.
+- Histograms show feature distribution ranges and skew patterns.
+- Correlation analysis helps identify the strongest observed relationships among features.
+- The data is historical and not clinically validated for real-world diagnosis.
 
-![Figure 1. Distributions of the predictor features.](./figures/heart-disease-mlops_eda_feature_histograms.png)
+### EDA screenshots
 
-![Figure 2. Correlation heatmap for the predictors and target.](./figures/heart-disease-mlops_eda_correlation_heatmap.png)
+<img src="./screenshots/heart-disease-mlops_eda_feature_histograms.png" alt="Figure 1. Feature histograms" width="600"/>
+<br><em>Figure 1. Feature histograms</em>
 
-![Figure 3. Counts for the two target classes.](./figures/heart-disease-mlops_eda_class_balance.png)
+<img src="./screenshots/heart-disease-mlops_eda_correlation_heatmap.png" alt="Figure 2. Correlation heatmap" width="600"/>
+<br><em>Figure 2. Correlation heatmap</em>
 
-The charts describe this small, historical dataset; they do not establish
-clinical relationships or generalize results to a current patient population.
-Histograms are useful here because they reveal each variable's observed range,
-shape, and potential skew. The heatmap summarizes pairwise linear association;
-it is descriptive rather than causal, and encoded clinical categories should
-not automatically be interpreted as continuous measurements. The class-count
-chart makes the target distribution visible and supports the use of
-stratification during validation.
+<img src="./screenshots/heart-disease-mlops_eda_class_balance.png" alt="Figure 3. Class balance chart" width="500"/>
+<br><em>Figure 3. Class balance chart</em>
 
-## 4. Model training and evaluation
+## 5. Feature engineering and model development
 
-Both candidates use a leakage-aware scikit-learn pipeline with median
-imputation and standard scaling. A stratified 80/20 train/test split uses
-`random_state=42`. Each candidate also receives five-fold stratified
-cross-validation on the training split. The metrics below are from the
-project's latest local MLflow runs and held-out test split:
+Two classification pipelines were trained and compared:
+- Logistic Regression
+- Random Forest Classifier
 
-| Model | CV ROC-AUC (mean +/- SD) | Test accuracy | Test precision | Test recall | Test ROC-AUC |
+Both models use a leakage-safe pipeline consisting of:
+1. median imputation for missing values
+2. feature scaling
+3. model training
+
+The train/test split used is a stratified 80/20 split with `random_state=42`. Five-fold stratified cross-validation was used for model comparison on the training set.
+
+### Model evaluation results
+
+| Model | CV ROC-AUC (mean ± SD) | Test Accuracy | Test Precision | Test Recall | Test ROC-AUC |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Logistic Regression | 0.8960 +/- 0.0148 | 0.8689 | 0.8125 | 0.9286 | 0.9513 |
-| Random Forest | 0.8818 +/- 0.0281 | 0.9016 | 0.8667 | 0.9286 | 0.9491 |
+| Logistic Regression | 0.8960 ± 0.0148 | 0.8689 | 0.8125 | 0.9286 | 0.9513 |
+| Random Forest | 0.8818 ± 0.0281 | 0.9016 | 0.8667 | 0.9286 | 0.9491 |
 
-The training script selects the candidate with the highest held-out test
-ROC-AUC; therefore Logistic Regression is selected in this run and saved as
-`models/heart_disease_pipeline.joblib`. It has the slightly higher test
-ROC-AUC, while Random Forest has higher accuracy and precision. Since the
-held-out test split is also used for model selection, these test metrics may be
-optimistic and should not be treated as unbiased final performance estimates.
-Accuracy is the fraction of correct classifications, precision is the fraction
-of predicted-positive cases that were positive in the test labels, and recall
-is the fraction of positive test cases recovered by the model. ROC-AUC measures
-ranking across thresholds; it does not establish calibration or clinical
-utility. The saved training summary is `models/training_summary.json`.
+The selected model is Logistic Regression because it achieved the highest held-out test ROC-AUC in this project run. The saved model is stored in `models/heart_disease_pipeline.joblib` and the summary is saved in `models/training_summary.json`.
 
-MLflow experiment runs are stored in the local `mlruns/` directory, which is
-excluded from Git. The GitHub Actions workflow uploads its own run's
-model, summary, candidate artifacts, ROC plots, and MLflow data for 14 days.
+Note: because the same held-out test split is used for model selection and reporting, the reported test metrics may be optimistic and should not be interpreted as unbiased final evaluation metrics for future unseen data.
 
-## 5. API, monitoring, and privacy-conscious logging
+## 6. Experiment tracking with MLflow
 
-The FastAPI service exposes:
+MLflow is used for experiment tracking. Each run logs:
+- model parameters
+- evaluation metrics
+- ROC plots
+- saved model artifacts
 
-- `GET /health` to confirm the model can be loaded.
-- `GET /metrics` to return real-time operational counters (`total_requests`,
-  `health_requests`, `predict_requests`, `predictions_generated`,
-  `validation_errors_422`, and `uptime_seconds`).
-- `POST /predict` to return a binary prediction, a class-1 probability, and a
-  plain-language prediction label.
+The MLflow experiment is stored locally under `mlruns/`.
 
-The request schema rejects unknown fields (including `target`), category
-codes outside those observed in the training data, and continuous values
-outside the observed dataset ranges. These are dataset constraints, not
-clinical limits. The model response is not medical advice or a diagnosis.
+![Figure 4. MLflow experiment tracking dashboard](./screenshots/heart-disease-mlops_MLflowExperiments.png)
 
-Application logging records the endpoint, HTTP method/status, and a generic
-event when a prediction is generated. It intentionally does not log request
-fields, patient values, prediction class, probability, or caller identity.
-Uvicorn access logging is disabled in the documented local and container
-commands to avoid adding client IP addresses. This reduces sensitive
-information in application logs; it does not make the API suitable for
-processing real patient data.
+## 7. API service, monitoring, and logging
 
-The logging behavior and metrics are covered by unit tests that verify successful request
-and prediction events appear without feature names or example field values.
-To inspect logs during local operation, use the server terminal or
-`docker logs heart-disease-api`. In Kubernetes, use:
+The FastAPI service exposes three core endpoints:
+- `GET /health` - verifies model loading and service health
+- `GET /metrics` - returns runtime counters and uptime metrics
+- `POST /predict` - accepts patient input and returns prediction and probability
 
-```powershell
-kubectl logs deployment/heart-disease-api
+The prediction API validates:
+- numeric ranges
+- allowed categorical values
+- rejection of `target` and unexpected fields
+
+The service intentionally avoids logging patient fields or raw payloads. It logs only route, status, and generic prediction events to preserve privacy and reduce risk from sensitive operational data.
+
+Example request payload:
+
+```json
+{
+  "age": 52,
+  "sex": 1,
+  "cp": 2,
+  "trestbps": 125,
+  "chol": 212,
+  "fbs": 0,
+  "restecg": 1,
+  "thalach": 168,
+  "exang": 0,
+  "oldpeak": 1.0,
+  "slope": 2,
+  "ca": 2,
+  "thal": 3
+}
+```
+
+### API screenshot
+
+![Figure 5. Local API prediction response](./screenshots/heart-disease-mlops_local_API_prediction.png)
+
+## 8. CI/CD workflow and automated testing
+
+The GitHub Actions workflow performs the following steps on pushes and pull requests:
+- check out repository
+- set up Python 3.11
+- install dependencies
+- run `python download.py`
+- run `python train.py`
+- run `flake8`
+- run `pytest -q`
+- upload model artifacts and MLflow outputs
+
+The workflow file is stored at `.github/workflows/main.yml`.
+
+![Figure 6. GitHub Actions workflow success](./screenshots/heart-disease-mlops_GitHubActions_Success.png)
+
+## 9. Docker containerization and deployment
+
+### 9.1 Docker
+
+The API is packaged in Docker using `Dockerfile` and can be built with:
+
+```bash
+docker build -t heart-disease-mlops .
+docker run --rm --name heart-disease-api -p 8000:8000 heart-disease-mlops
+```
+
+The Docker image is ready for local deployment and validation.
+
+![Figure 7. Docker Desktop container image](./screenshots/heart-disease-mlops_docker_desktop.png)
+
+### 9.2 Kubernetes deployment
+
+The project includes `deployment.yaml` and `service.yaml` for Kubernetes deployment. A local cluster or Docker Desktop Kubernetes environment can expose the API via a LoadBalancer Service.
+
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+kubectl get deployments,pods,services
+kubectl port-forward service/heart-disease-api-service 8001:80
+```
+
+![Figure 8. Kubernetes deployment](./screenshots/heart-disease-mlops_kubernetes_deployment.png)
+
+## 10. Repository structure and deliverables
+
+Key files in this project:
+- `download.py` – data collection and cleaning
+- `train.py` – model training and MLflow logging
+- `api/main.py` – FastAPI service
+- `Dockerfile` – container build definition
+- `deployment.yaml` – Kubernetes deployment manifest
+- `service.yaml` – Kubernetes service manifest
+- `tests/` – pytest test suite
+- `.github/workflows/main.yml` – CI/CD automation
+- `report/` – report assets and screenshots
+
+### Code repository
+
+GitHub repository: https://github.com/PitchaimaniN/heart-disease-mlops
+
+## 11. Final assessment and conclusion
+
+This project demonstrates a complete MLOps lifecycle for a heart disease prediction task, including data preparation, model comparison, experiment tracking, serving, deployment, and monitoring. It satisfies the main assignment objectives by combining software engineering and machine learning operations into a reproducible workflow.
+
+The implementation is modular, testable, and suitable for coursework demonstration. The project also highlights the importance of privacy-aware logging, artifact tracking, CI validation, and reproducible deployment patterns in real-world ML systems.
+
+## 12. Evidence checklist
+
+The assignment requirements are met through the following evidence:
+- Setup/install instructions included
+- EDA and model development documented
+- MLflow tracking implemented and screenshot attached
+- FastAPI API with metrics and prediction endpoints implemented
+- Docker image built and validated
+- Kubernetes deployment manifest included and validated locally
+- GitHub Actions workflow implemented and screenshot attached
+- Final report generated in Markdown and PDF format
+
+This report is intended to accompany the repository implementation and provide a concise but complete overview of the project lifecycle.
